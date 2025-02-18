@@ -25,49 +25,50 @@ use TYPO3\CMS\Extbase\Utility\LocalizationUtility;
  */
 class Utf8Controller extends ActionController
 {
-    /**
-     * The default view object to use if none of the resolved views can render
-     * a response for the current request.
-     *
-     * @var string
-     */
-    protected $defaultViewObjectName = BackendTemplateView::class;
-
-    protected function initializeView(ViewInterface $view): void
+    public function __construct(private \TYPO3\CMS\Backend\Template\ModuleTemplateFactory $moduleTemplateFactory)
     {
-        $buttonBar = $this->view->getModuleTemplate()
-            ->getDocHeaderComponent()
-            ->getButtonBar();
-
-        // Bookmark
-        $shortcutButton = $buttonBar->makeShortcutButton()
-            ->setModuleName('tools_sfdbutf8')
-            ->setGetVariables(['route', 'module', 'id'])
-            ->setDisplayName('SF DB UTF-8 Module');
-        $buttonBar->addButton($shortcutButton, ButtonBar::BUTTON_POSITION_RIGHT);
     }
 
-    public function showAction(): void
+    protected function initializeView(): void
     {
+        $moduleTemplate = $this->moduleTemplateFactory->create($this->request);
+//        $buttonBar = $moduleTemplate
+//            ->getDocHeaderComponent()
+//            ->getButtonBar();
+//
+//        // Bookmark
+//        $shortcutButton = $buttonBar->makeShortcutButton()
+//            ->setModuleName('tools_sfdbutf8')
+//            ->setGetVariables(['route', 'module', 'id'])
+//            ->setDisplayName('SF DB UTF-8 Module');
+//        $buttonBar->addButton($shortcutButton, ButtonBar::BUTTON_POSITION_RIGHT);
+    }
+
+    public function showAction(): \Psr\Http\Message\ResponseInterface
+    {
+        $moduleTemplate = $this->moduleTemplateFactory->create($this->request);
         $collations = [];
         $connection = $this->getConnectionPool()->getConnectionByName('Default');
         $statement = $connection->query('SHOW COLLATION WHERE Charset like "utf8%"');
-        while ($row = $statement->fetch()) {
+        while ($row = $statement->fetchAssociative()) {
             $collations[$row['Collation']] = $row['Collation'];
         }
         $this->view->assign('collations', $collations);
+        $moduleTemplate->setContent($this->view->render());
+        return $this->htmlResponse($moduleTemplate->renderContent());
     }
 
-    public function dbCheckAction(string $collation): void
+    public function dbCheckAction(string $collation): \Psr\Http\Message\ResponseInterface
     {
+        $moduleTemplate = $this->moduleTemplateFactory->create($this->request);
         // show all tables with additional settings
         $connection = $this->getConnectionPool()->getConnectionByName('Default');
         $tableStatement = $connection->query('SHOW TABLE STATUS');
 
         $tables = [];
-        while ($table = $tableStatement->fetch()) {
+        while ($table = $tableStatement->fetchAssociative()) {
             $columnStatement = $connection->query('SHOW FULL COLUMNS FROM ' . $table['Name'] . ' WHERE Collation <> \'\'');
-            while ($column = $columnStatement->fetch()) {
+            while ($column = $columnStatement->fetchAssociative()) {
                 $table['columns'][] = $column;
             }
             $tables[] = $table;
@@ -75,9 +76,11 @@ class Utf8Controller extends ActionController
 
         $this->view->assign('collation', $collation);
         $this->view->assign('tables', $tables);
+        $moduleTemplate->setContent($this->view->render());
+        return $this->htmlResponse($moduleTemplate->renderContent());
     }
 
-    public function convertAction(string $collation): void
+    public function convertAction(string $collation): \Psr\Http\Message\ResponseInterface
     {
         $collationConverter = $this->getCollationConverter();
         $collationConverter->convert($collation);
@@ -87,7 +90,7 @@ class Utf8Controller extends ActionController
             LocalizationUtility::translate('messageChangeSuccessful.title', 'sfdbutf8', [$collation])
         );
 
-        $this->redirect('show');
+        return $this->redirect('show');
     }
 
     protected function getCollationConverter(): CollationConverter

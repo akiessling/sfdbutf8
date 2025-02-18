@@ -5,15 +5,14 @@ $EM_CONF[$_EXTKEY] = [
     'description' => 'With this extension you can set all tables and columns to UTF-8 collation (no converting)',
     'category' => 'be',
     'version' => '2.1.0',
-    'module' => 'mod1',
     'state' => 'stable',
     'author' => 'Stefan Froemken',
     'author_email' => 'froemken@gmail.com',
     'author_company' => '',
     'constraints' => [
         'depends' => [
-            'php' => '7.2.0-8.1.0',
-            'typo3' => '10.4.32-11.5.99',
+            'php' => '8.1.0-8.2.99',
+            'typo3' => '12.4.0-12.4.99',
         ],
         'conflicts' => [
         ],

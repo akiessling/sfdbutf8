@@ -12,7 +12,6 @@ declare(strict_types=1);
 namespace StefanFroemken\Sfdbutf8\Converter;
 
 use Doctrine\Common\EventManager;
-use Doctrine\DBAL\DBALException;
 use Doctrine\DBAL\Events;
 use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Doctrine\DBAL\Schema\AbstractSchemaManager;
@@ -64,7 +63,7 @@ class CollationConverter
             $this->connection = $this->getConnectionPool()->getConnectionByName(
                 ConnectionPool::DEFAULT_CONNECTION_NAME
             );
-        } catch (DBALException $DBALException) {
+        } catch (\Doctrine\DBAL\Exception $DBALException) {
             throw new \RuntimeException('Connection "Default" is not configured');
         }
 
@@ -98,7 +97,7 @@ class CollationConverter
      * Main method which will search for different collation in table options
      * and executes the ALTER statements for each table and column
      *
-     * @throws DBALException
+     * @throws \Doctrine\DBAL\Exception
      */
     public function convert(string $collation, bool $executeStatements = true): void
     {
@@ -143,7 +142,7 @@ class CollationConverter
     }
 
     /**
-     * @throws DBALException
+     * @throws \Doctrine\DBAL\Exception
      */
     protected function compareAndExecuteAlterStatements(): void
     {
@@ -166,7 +165,7 @@ class CollationConverter
     /**
      * Useful, if you want to execute ALTER table by table. See ConvertCollationCommand
      *
-     * @throws DBALException
+     * @throws \Doctrine\DBAL\Exception
      */
     public function executeAlterStatementsForTable(string $tableName): int
     {
@@ -297,10 +296,10 @@ class CollationConverter
                 $table->getColumns(),
                 $table->getIndexes(),
                 $table->getForeignKeys(),
-                0,
+                [],
                 $table->getOptions()
             );
-        } catch (DBALException $exception) {
+        } catch (\Doctrine\DBAL\Exception $exception) {
             return null;
         }
     }
@@ -313,11 +312,13 @@ class CollationConverter
      */
     protected function buildQuotedColumn(Column $column): Column
     {
+        $data = $column->toArray();
+        unset($data['name'], $data['type'], $data['charset']);
+
         return GeneralUtility::makeInstance(
             Column::class,
             $this->platform->quoteIdentifier($column->getName()),
             $column->getType(),
-            array_diff_key($column->toArray(), ['name', 'type'])
         );
     }
 
@@ -342,7 +343,7 @@ class CollationConverter
     {
         try {
             return $this->getConnectionPool()->getConnectionForTable($table);
-        } catch (DBALException $DBALException) {
+        } catch (\Doctrine\DBAL\Exception $DBALException) {
             throw new \InvalidArgumentException(
                 'Could not get connection for table ' . $table . '. Maybe table does not exists'
             );
