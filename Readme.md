@@ -1,5 +1,9 @@
 # TYPO3 Extension `sfdbutf8`
 
+| :warning: WARNING                                 |
+|:--------------------------------------------------|
+| Backup your database before running a conversion! |
+
 ![Build Status](https://github.com/froemken/sfdbutf8/workflows/CI/badge.svg)
 
 With sfdbutf8 you can change the collation of tables and columns of
@@ -12,21 +16,14 @@ Keep in mind that no conversion of the content itself will happen!
 
 ## 2 Usage
 
-### 2.1 Installation
+### Installation from fork
 
-#### Installation using Composer
+If you want to install this fork from GitHub, run:
 
-The recommended way to install the extension is using Composer.
-
-Run the following command within your Composer based TYPO3 project:
-
+```bash
+composer config repositories.sfdbutf8 vcs https://github.com/akiessling/sfdbutf8.git
+composer require stefanfroemken/sfdbutf8:dev-main
 ```
-composer require stefanfroemken/sfdbutf8
-```
-
-#### Installation as extension from TYPO3 Extension Repository (TER)
-
-Download and install `sfdbutf8` with the extension manager module.
 
 ### 2.2 Minimal setup
 
