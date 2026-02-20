@@ -11,8 +11,6 @@ declare(strict_types=1);
 
 namespace StefanFroemken\Sfdbutf8\Converter;
 
-use Doctrine\Common\EventManager;
-use Doctrine\DBAL\Events;
 use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Doctrine\DBAL\Schema\AbstractSchemaManager;
 use Doctrine\DBAL\Schema\Column;
@@ -20,7 +18,9 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\DBAL\Schema\SchemaDiff;
 use Doctrine\DBAL\Schema\SchemaException;
 use Doctrine\DBAL\Schema\Table;
-use StefanFroemken\Sfdbutf8\EventListener\SchemaAlterTableListener;
+use Doctrine\DBAL\Types\AsciiStringType;
+use Doctrine\DBAL\Types\StringType;
+use Doctrine\DBAL\Types\TextType;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Schema\Comparator;
@@ -69,13 +69,6 @@ class CollationConverter
 
         try {
             $this->platform = $this->connection->getDatabasePlatform();
-            $eventManager = $this->platform->getEventManager();
-            if ($eventManager instanceof EventManager) {
-                $eventManager->addEventListener(
-                    Events::onSchemaAlterTable,
-                    GeneralUtility::makeInstance(SchemaAlterTableListener::class)
-                );
-            }
         } catch (\Exception $exception) {
             throw new \RuntimeException('Invalid platform specifies for connection "Default"');
         }
@@ -84,13 +77,13 @@ class CollationConverter
             throw new \RuntimeException('No platform specifies for connection "Default"');
         }
 
-        $this->schemaManager = $this->connection->getSchemaManager();
+        $this->schemaManager = $this->connection->createSchemaManager();
         if (!$this->schemaManager instanceof AbstractSchemaManager) {
             throw new \RuntimeException('No SchemaManager found for Connection "Default"');
         }
 
-        $this->fromSchema = $this->schemaManager->createSchema();
-        $this->toSchema = $this->schemaManager->createSchema();
+        $this->fromSchema = $this->schemaManager->introspectSchema();
+        $this->toSchema = $this->schemaManager->introspectSchema();
     }
 
     /**
@@ -119,10 +112,17 @@ class CollationConverter
                 $tableToDefinition->addOption('collation', $collation);
 
                 foreach ($tableToDefinition->getColumns() as $column) {
-                    if ($column->hasPlatformOption('collation')) {
-                        $column->setPlatformOption('charset', $this->extractCharsetFromCollation($collation));
-                        $column->setPlatformOption('collation', $collation);
+                    if (!$this->isCollationAwareColumn($column)) {
+                        continue;
                     }
+
+                    $currentCollation = (string)($column->getPlatformOptions()['collation'] ?? '');
+                    if (str_ends_with(strtolower($currentCollation), '_bin')) {
+                        continue;
+                    }
+
+                    $column->setPlatformOption('charset', $this->extractCharsetFromCollation($collation));
+                    $column->setPlatformOption('collation', $collation);
                 }
             }
         } catch (SchemaException $schemaException) {
@@ -146,20 +146,27 @@ class CollationConverter
      */
     protected function compareAndExecuteAlterStatements(): void
     {
-        foreach ($this->getAvailableTablenames() as $tableName) {
-            $this->executeAlterStatementsForTable($tableName);
+        foreach ($this->getAlterStatements() as $statements) {
+            foreach ($statements as $statement) {
+                $this->connection->executeStatement($statement);
+            }
         }
     }
 
     protected function getAlterStatements(): array
     {
-        $comparator = GeneralUtility::makeInstance(Comparator::class, $this->platform);
-        $schemaDiff = $comparator->compare($this->fromSchema, $this->toSchema);
+        $comparator = GeneralUtility::makeInstance(Comparator::class, $this->schemaManager->createComparator());
+        $schemaDiff = $comparator->compareSchemas($this->fromSchema, $this->toSchema);
+        $updateSuggestions = [];
 
-        return array_merge_recursive(
-            $this->getChangedTableOptions($schemaDiff),
-            $this->getChangedFieldUpdateSuggestions($schemaDiff)
-        );
+        foreach ($schemaDiff->getAlteredTables() as $tableName => $tableDiff) {
+            $statements = $this->platform->getAlterTableSQL($tableDiff);
+            foreach ($statements as $statement) {
+                $updateSuggestions[$tableName][] = $statement;
+            }
+        }
+
+        return $updateSuggestions;
     }
 
     /**
@@ -176,11 +183,15 @@ class CollationConverter
         }
 
         $amountOfTables = 0;
-        if (array_key_exists($tableName, $alterStatements)) {
-            $amountOfTables = count($alterStatements[$tableName]);
-            foreach ($alterStatements[$tableName] as $alterStatementForTable) {
-                $this->connection->query($alterStatementForTable);
+        foreach ($alterStatements as $diffTableName => $statementsForTable) {
+            if (trim((string)$diffTableName, '`') !== trim($tableName, '`')) {
+                continue;
             }
+            $amountOfTables = count($statementsForTable);
+            foreach ($statementsForTable as $alterStatementForTable) {
+                $this->connection->executeStatement($alterStatementForTable);
+            }
+            break;
         }
 
         return $amountOfTables;
@@ -334,6 +345,14 @@ class CollationConverter
         [$charset] = explode('_', $collation);
 
         return $charset;
+    }
+
+    protected function isCollationAwareColumn(Column $column): bool
+    {
+        $type = $column->getType();
+        return $type instanceof StringType
+            || $type instanceof TextType
+            || $type instanceof AsciiStringType;
     }
 
     /**

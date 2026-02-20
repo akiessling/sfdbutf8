@@ -12,12 +12,9 @@ declare(strict_types=1);
 namespace StefanFroemken\Sfdbutf8\Controller;
 
 use StefanFroemken\Sfdbutf8\Converter\CollationConverter;
-use TYPO3\CMS\Backend\Template\Components\ButtonBar;
-use TYPO3\CMS\Backend\View\BackendTemplateView;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Mvc\Controller\ActionController;
-use TYPO3\CMS\Extbase\Mvc\View\ViewInterface;
 use TYPO3\CMS\Extbase\Utility\LocalizationUtility;
 
 /**
@@ -44,18 +41,22 @@ class Utf8Controller extends ActionController
 //        $buttonBar->addButton($shortcutButton, ButtonBar::BUTTON_POSITION_RIGHT);
     }
 
-    public function showAction(): \Psr\Http\Message\ResponseInterface
+    public function showAction(?string $collation = null): \Psr\Http\Message\ResponseInterface
     {
         $moduleTemplate = $this->moduleTemplateFactory->create($this->request);
         $collations = [];
+        /** @var \TYPO3\CMS\Core\Database\Connection $connection */
         $connection = $this->getConnectionPool()->getConnectionByName('Default');
-        $statement = $connection->query('SHOW COLLATION WHERE Charset like "utf8%"');
+        $statement = $connection->executeQuery('SHOW COLLATION WHERE Charset like "utf8%"');
         while ($row = $statement->fetchAssociative()) {
             $collations[$row['Collation']] = $row['Collation'];
         }
-        $this->view->assign('collations', $collations);
-        $moduleTemplate->setContent($this->view->render());
-        return $this->htmlResponse($moduleTemplate->renderContent());
+        $selectedCollation = $collation ?? 'utf8_general_ci';
+        $moduleTemplate->assignMultiple([
+            'collations' => $collations,
+            'selectedCollation' => $selectedCollation,
+        ]);
+        return $moduleTemplate->renderResponse('Utf8/Show');
     }
 
     public function dbCheckAction(string $collation): \Psr\Http\Message\ResponseInterface
@@ -63,21 +64,23 @@ class Utf8Controller extends ActionController
         $moduleTemplate = $this->moduleTemplateFactory->create($this->request);
         // show all tables with additional settings
         $connection = $this->getConnectionPool()->getConnectionByName('Default');
-        $tableStatement = $connection->query('SHOW TABLE STATUS');
+        $tableStatement = $connection->executeQuery('SHOW TABLE STATUS');
 
         $tables = [];
         while ($table = $tableStatement->fetchAssociative()) {
-            $columnStatement = $connection->query('SHOW FULL COLUMNS FROM ' . $table['Name'] . ' WHERE Collation <> \'\'');
+            $columnStatement = $connection->executeQuery('SHOW FULL COLUMNS FROM ' . $table['Name'] . ' WHERE Collation <> \'\'');
             while ($column = $columnStatement->fetchAssociative()) {
+                $column['isBinaryCollation'] = is_string($column['Collation'] ?? null) && str_ends_with(strtolower($column['Collation']), '_bin');
                 $table['columns'][] = $column;
             }
             $tables[] = $table;
         }
 
-        $this->view->assign('collation', $collation);
-        $this->view->assign('tables', $tables);
-        $moduleTemplate->setContent($this->view->render());
-        return $this->htmlResponse($moduleTemplate->renderContent());
+        $moduleTemplate->assignMultiple([
+            'collation' => $collation,
+            'tables' => $tables,
+        ]);
+        return $moduleTemplate->renderResponse('Utf8/DbCheck');
     }
 
     public function convertAction(string $collation): \Psr\Http\Message\ResponseInterface
@@ -90,7 +93,12 @@ class Utf8Controller extends ActionController
             LocalizationUtility::translate('messageChangeSuccessful.title', 'sfdbutf8', [$collation])
         );
 
-        return $this->redirect('show');
+        return $this->redirect(
+            'show',
+            null,
+            null,
+            ['collation' => $collation]
+        );
     }
 
     protected function getCollationConverter(): CollationConverter

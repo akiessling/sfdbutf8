@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace StefanFroemken\Sfdbutf8\Command;
 
-use Doctrine\DBAL\DBALException;
+use Doctrine\DBAL\Exception as DBALException;
 use StefanFroemken\Sfdbutf8\Converter\CollationConverter;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\ProgressBar;
@@ -75,7 +75,7 @@ class ConvertCollationCommand extends Command
 
         $io->info('All tables and columns converted');
 
-        return 0;
+        return Command::SUCCESS;
     }
 
     protected function getCollationConverter(): CollationConverter

@@ -2,13 +2,23 @@
 	  xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers"
 	  data-namespace-typo3-fluid="true">
 
-<f:layout name="Default" />
+<f:layout name="Module" />
 
-<f:section name="headline">
+<f:section name="Content">
+	<style>
+		.sfdbutf8-warning-row,
+		.sfdbutf8-warning-row td {
+			color: #000 !important;
+			font-style: italic;
+		}
+
+		[data-bs-theme="dark"] .sfdbutf8-warning-row,
+		[data-bs-theme="dark"] .sfdbutf8-warning-row td {
+			color: #fff !important;
+		}
+	</style>
+
 	<h1>{f:translate(key: 'txt_header')}</h1>
-</f:section>
-
-<f:section name="content">
 	<f:form action="convert">
 		<f:form.hidden name="collation" value="{collation}" />
 		<f:form.submit class="btn btn-primary" value="{f:translate(key: 'btn_convert', arguments: {0: collation})}" />
@@ -33,17 +43,30 @@
 				<th>Name</th>
 				<th>Type</th>
 				<th>Collation</th>
+				<th>Hinweis</th>
 			</tr>
 			</thead>
 			<tbody>
 				<f:for each="{table.columns}" as="column">
-					<f:variable name="bgClass">{f:if(condition: '{collation}=={column.Collation}', then: 'bg-success', else: 'bg-danger')}</f:variable>
-
-					<tr class="{bgClass}">
-						<td class="{bgClass}">{column.Field}</td>
-						<td class="{bgClass}">{column.Type}</td>
-						<td class="{bgClass}">{column.Collation}</td>
-					</tr>
+					<f:if condition="{column.isBinaryCollation}">
+						<f:then>
+							<tr class="bg-warning sfdbutf8-warning-row">
+								<td class="bg-warning sfdbutf8-warning-row">{column.Field}</td>
+								<td class="bg-warning sfdbutf8-warning-row">{column.Type}</td>
+								<td class="bg-warning sfdbutf8-warning-row">{column.Collation}</td>
+								<td class="bg-warning sfdbutf8-warning-row">Wird nicht geaendert (_bin-Collation).</td>
+							</tr>
+						</f:then>
+						<f:else>
+							<f:variable name="bgClass">{f:if(condition: '{collation}=={column.Collation}', then: 'bg-success', else: 'bg-danger')}</f:variable>
+							<tr class="{bgClass}">
+								<td class="{bgClass}">{column.Field}</td>
+								<td class="{bgClass}">{column.Type}</td>
+								<td class="{bgClass}">{column.Collation}</td>
+								<td class="{bgClass}"></td>
+							</tr>
+						</f:else>
+					</f:if>
 				</f:for>
 			</tbody>
 		</table>

@@ -11,7 +11,6 @@ declare(strict_types=1);
 
 namespace StefanFroemken\Sfdbutf8\EventListener;
 
-use Doctrine\DBAL\Event\SchemaAlterTableEventArgs;
 use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Doctrine\DBAL\Platforms\MySqlPlatform;
 use TYPO3\CMS\Core\Database\Schema\TableDiff;
@@ -31,8 +30,16 @@ class SchemaAlterTableListener
      * of ALTER TABLE statements and adds the required statements to
      * change the COLLATE on MySQL platforms if necessary.
      */
-    public function onSchemaAlterTable(SchemaAlterTableEventArgs $event): bool
+    public function onSchemaAlterTable(object $event): bool
     {
+        if (
+            !method_exists($event, 'getPlatform')
+            || !method_exists($event, 'getTableDiff')
+            || !method_exists($event, 'addSql')
+        ) {
+            return false;
+        }
+
         $this->platform = $event->getPlatform();
 
         /** @var TableDiff $tableDiff */
